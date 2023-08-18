@@ -1,6 +1,7 @@
 
 /*
-g++ -O2 -std=c++11 main.cpp node.cpp lstm.cpp
+g++ -O2 -fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fno-sanitize=null -fno-sanitize=alignment -std=c++11 main.cpp modelseq.cpp model.cpp layer.cpp lstm.cpp policy.cpp params.cpp node.cpp
+-fsanitize=address
 */
 
 #include <iostream>
@@ -13,7 +14,7 @@ g++ -O2 -std=c++11 main.cpp node.cpp lstm.cpp
 #define lstm_h
 using namespace std;
 
-#define initParam 0.01
+#define initParam 1
 #define learnRate 0.005
 #define momentum 0.7
 #define batchSize 10
@@ -85,44 +86,106 @@ public:
     double dnonlinear(double x);
 };
 
-class LSTMParams{
+class Params{
 public:
     int size;
     double* params;
     double* gradient;
 
-    LSTMParams(){}
-    LSTMParams(int inputSize, int outputSize);
+    Params(){}
+    Params(int size_);
     void randomize();
-    void copy(LSTMParams params_);
-    void accumulateGradient(LSTMParams params_);
+    void copy(Params params_);
+    void accumulateGradient(Params params_);
     void update();
     void resetGradient();
 };
 
-class LSTM{
+class Layer{
+protected:
+    vector<Data*> allHiddenData;
+    vector<Node*> allNodes;
+
+    Data* addData(int size);
+    void resetGradient();
+    
 public:
-    LSTMParams params;
+    Params params;
 
     int inputSize;
     int outputSize;
 
     Data* input;
-    Data* hidden;
-    Data* cell;
     Data* output;
 
-    vector<Data*> allHiddenData;
-    vector<Node*> allNodes;
+    Layer(){}
 
-    LSTM(){}
-    LSTM(int size); // empty LSTM
-    LSTM(Data* input_, Data* output_, LSTM* prevUnit, LSTMParams params_);
-    Data* addData(int size);
-
-    void forwardPass(); // resets gradient of all hidden data
+    void forwardPass(); // resets gradient of all data
     void backwardPass();
-    void resetGradient();
+
+    virtual void vf(){};
+};
+
+class LSTM : public Layer{
+public:
+    Data* cell;
+
+    // Looks at previous unit's output and cell.
+    LSTM(int size); // empty LSTM to start the chain
+    LSTM(Data* input_, Data* output_, LSTM* prevUnit);
+};
+
+class PolicyOutput : public Layer{
+public:
+    PolicyOutput(Data* input_, Data* output_);
+};
+
+class Model{
+private:
+    int lastSize = -1; // used to initialize model
+    Data* lastAct;
+
+public:
+    vector<Layer*> layers;
+    vector<Data*> activations;
+
+    int inputSize;
+    int outputSize;
+
+    Model(){}
+
+    // Construct a model structure
+    Model(int inputSize_);
+    void addLSTM(int outputSize_);
+    void addOutput(int outputSize_);
+
+    // Define an active Model unit from given structure
+    Model(Model structure, Model* prevModel, Data* input, Data* output);
+
+    void copyParams(Model* m);
+    void randomize();
+
+    void forwardPass();
+    void backwardPass();
+    void accumulateGradient(Model* m);
+};
+
+class ModelSeq{
+public:
+    int T;
+    vector<Model> seq;
+    vector<Data> inputs;
+    vector<Data> outputs;
+    vector<double*> expectedOutputs;
+    vector<bool*> validOutput;
+    Model paramStore;
+
+    ModelSeq(Model structure, int T_);
+    void forwardPassUnit(int index);
+    void forwardPass();
+    void backwardPass();
+
+    double getLoss();
 };
 
 #endif

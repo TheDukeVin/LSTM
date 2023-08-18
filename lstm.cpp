@@ -1,64 +1,21 @@
 
 #include "lstm.h"
 
-LSTMParams::LSTMParams(int inputSize, int outputSize){
-    size = 4 * ((inputSize + outputSize + 1) * outputSize);
-    params = new double[size];
-    gradient = new double[size];
-    for(int i=0; i<size; i++){
-        params[i] = gradient[i] = 0;
-    }
-}
-
-void LSTMParams::randomize(){
-    for(int i=0; i<size; i++){
-        params[i] = (2 * (double) rand() / RAND_MAX - 1) * initParam;
-    }
-}
-
-void LSTMParams::copy(LSTMParams params_){
-    for(int i=0; i<size; i++){
-        params[i] = params_.params[i];
-        gradient[i] = params_.gradient[i];
-    }
-}
-
-void LSTMParams::accumulateGradient(LSTMParams params_){
-    for(int i=0; i<size; i++){
-        gradient[i] += params_.gradient[i];
-    }
-}
-
-void LSTMParams::update(){
-    for(int i=0; i<size; i++){
-        params[i] -= gradient[i] * learnRate / batchSize;
-        gradient[i] *= momentum;
-        assert(abs(params[i]) < 1000);
-    }
-}
-
-void LSTMParams::resetGradient(){
-    for(int i=0; i<size; i++){
-        gradient[i] = 0;
-    }
-}
-
 LSTM::LSTM(int size){
-    hidden = new Data(size);
+    output = new Data(size);
     cell = new Data(size);
     for(int i=0; i<size; i++){
-        hidden->data[i] = hidden->gradient[i] = 0;
+        output->data[i] = output->gradient[i] = 0;
         cell->data[i] = cell->gradient[i] = 0;
     }
 }
 
-LSTM::LSTM(Data* input_, Data* output_, LSTM* prevUnit, LSTMParams params_){
+LSTM::LSTM(Data* input_, Data* output_, LSTM* prevUnit){
     input = input_;
     output = output_;
     inputSize = input->size;
     outputSize = output->size;
-    params = LSTMParams(inputSize, outputSize);
-    params.copy(params_);
+    params = Params(4 * ((inputSize + outputSize + 1) * outputSize));
     if(prevUnit == NULL){
         prevUnit = new LSTM(outputSize);
     }
@@ -66,7 +23,7 @@ LSTM::LSTM(Data* input_, Data* output_, LSTM* prevUnit, LSTMParams params_){
     // Initialize Data and Nodes
 
     Data* XH = addData(inputSize + outputSize);
-    allNodes.push_back(new ConcatNode(input, prevUnit->hidden, XH));
+    allNodes.push_back(new ConcatNode(input, prevUnit->output, XH));
 
     int weightSize = (inputSize + outputSize) * outputSize;
     int biasSize = outputSize;
@@ -103,38 +60,6 @@ LSTM::LSTM(Data* input_, Data* output_, LSTM* prevUnit, LSTMParams params_){
 
     Data* feedback = addData(outputSize);
     allNodes.push_back(new UnitaryNode(cell, feedback, "tanh"));
-    hidden = addData(outputSize);
-    allNodes.push_back(new MultiplicationNode(H, feedback, hidden));
 
-    allNodes.push_back(new UnitaryNode(hidden, output, "identity"));
-}
-
-Data* LSTM::addData(int size){
-    Data* data = new Data(size);
-    allHiddenData.push_back(data);
-    return data;
-}
-
-void LSTM::forwardPass(){
-    resetGradient();
-    for(int i=0; i<allNodes.size(); i++){
-        allNodes[i]->forwardPass();
-    }
-}
-
-void LSTM::backwardPass(){
-    for(int i=allNodes.size()-1; i>=0; i--){
-        allNodes[i]->backwardPass();
-    }
-}
-
-void LSTM::resetGradient(){
-    input->resetGradient();
-    hidden->resetGradient();
-    cell->resetGradient();
-    output->resetGradient();
-    for(int i=0; i<allHiddenData.size(); i++){
-        allHiddenData[i]->resetGradient();
-    }
-    params.resetGradient();
+    allNodes.push_back(new MultiplicationNode(H, feedback, output));
 }
