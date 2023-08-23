@@ -45,8 +45,14 @@ double UnitaryNode::nonlinear(double x){
     if(operation == "tanh"){
         return tanh(x);
     }
-    assert(operation == "identity");
-    return x;
+    if(operation == "identity"){
+        return x;
+    }
+    if(operation == "relu"){
+        if(x < 0) return 0;
+        return x;
+    }
+    assert(false);
 }
 
 double UnitaryNode::dnonlinear(double x){
@@ -58,8 +64,14 @@ double UnitaryNode::dnonlinear(double x){
         double t = tanh(x);
         return 1 - t * t;
     }
-    assert(operation == "identity");
-    return 1;
+    if(operation == "identity"){
+        return 1;
+    }
+    if(operation == "relu"){
+        if(x < 0) return 0;
+        return 1;
+    }
+    assert(false);
 }
 
 // Define forward and backward pass operations

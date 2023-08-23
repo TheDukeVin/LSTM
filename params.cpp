@@ -10,9 +10,9 @@ Params::Params(int size_){
     }
 }
 
-void Params::randomize(){
+void Params::randomize(double scale){
     for(int i=0; i<size; i++){
-        params[i] = (2 * (double) rand() / RAND_MAX - 1) * initParam;
+        params[i] = (2 * (double) rand() / RAND_MAX - 1) * scale;
     }
 }
 
@@ -29,9 +29,9 @@ void Params::accumulateGradient(Params params_){
     }
 }
 
-void Params::update(){
+void Params::update(double scale, double momentum){
     for(int i=0; i<size; i++){
-        params[i] -= gradient[i] * learnRate / batchSize;
+        params[i] -= gradient[i] * scale;
         gradient[i] *= momentum;
         assert(abs(params[i]) < 1000);
     }

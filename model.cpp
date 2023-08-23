@@ -12,16 +12,25 @@ void Model::addLSTM(int outputSize_){
     Data* newAct = new Data(outputSize_);
     layers.push_back(new LSTM(lastAct, newAct, NULL));
     activations.push_back(newAct);
-    lastSize = outputSize_;
     lastAct = newAct;
+    lastSize = outputSize_;
+}
+
+void Model::addDense(int outputSize_){
+    Data* newAct = new Data(outputSize_);
+    layers.push_back(new Dense(lastAct, newAct));
+    activations.push_back(newAct);
+    lastAct = newAct;
+    lastSize = outputSize_;
 }
 
 void Model::addOutput(int outputSize_){
     Data* newAct = new Data(outputSize_);
     layers.push_back(new PolicyOutput(lastAct, newAct));
     activations.push_back(newAct);
-    outputSize = outputSize_;
     lastAct = newAct;
+
+    outputSize = outputSize_;
 }
 
 Model::Model(Model structure, Model* prevModel, Data* input, Data* output){
@@ -38,6 +47,7 @@ Model::Model(Model structure, Model* prevModel, Data* input, Data* output){
             newAct = new Data(structure.layers[i]->outputSize);
         }
         activations.push_back(newAct);
+        // Cast derived classes before base classes
         if(dynamic_cast<LSTM*>(structure.layers[i]) != NULL){
             LSTM* prevLSTM;
             if(prevModel == NULL) prevLSTM = NULL;
@@ -46,6 +56,9 @@ Model::Model(Model structure, Model* prevModel, Data* input, Data* output){
         }
         else if(dynamic_cast<PolicyOutput*>(structure.layers[i]) != NULL){
             layers.push_back(new PolicyOutput(lastAct, newAct));
+        }
+        else if(dynamic_cast<Dense*>(structure.layers[i]) != NULL){
+            layers.push_back(new Dense(lastAct, newAct));
         }
         else{
             assert(false);
@@ -61,9 +74,9 @@ void Model::copyParams(Model* m){
     }
 }
 
-void Model::randomize(){
+void Model::randomize(double scale){
     for(int i=0; i<layers.size(); i++){
-        layers[i]->params.randomize();
+        layers[i]->params.randomize(scale);
     }
 }
 
@@ -79,8 +92,20 @@ void Model::backwardPass(){
     }
 }
 
+void Model::resetGradient(){
+    for(int i=0; i<layers.size(); i++){
+        layers[i]->params.resetGradient();
+    }
+}
+
 void Model::accumulateGradient(Model* m){
     for(int i=0; i<layers.size(); i++){
         layers[i]->params.accumulateGradient(m->layers[i]->params);
+    }
+}
+
+void Model::updateParams(double scale, double momentum){
+    for(int i=0; i<layers.size(); i++){
+        layers[i]->params.update(scale, momentum);
     }
 }

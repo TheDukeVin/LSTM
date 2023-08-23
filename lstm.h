@@ -1,23 +1,32 @@
 
 /*
-g++ -O2 -fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fno-sanitize=null -fno-sanitize=alignment -std=c++11 main.cpp modelseq.cpp model.cpp layer.cpp lstm.cpp policy.cpp params.cpp node.cpp
--fsanitize=address
+g++ -O2 -std=c++11 -pthread main.cpp modelseq.cpp model.cpp layer.cpp lstm.cpp policy.cpp params.cpp node.cpp
+
+-fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fno-sanitize=null -fno-sanitize=alignment
+
+rsync -r LSTM kevindu@login.rc.fas.harvard.edu:./MultiagentSnake
+
 */
 
 #include <iostream>
+#include <fstream>
 #include <vector>
 #include <string>
 #include <stdlib.h>
 #include <math.h>
+#include <thread>
+#include <cassert>
 
 #ifndef lstm_h
 #define lstm_h
 using namespace std;
 
-#define initParam 1
-#define learnRate 0.005
-#define momentum 0.7
-#define batchSize 10
+// #define initParam 0.1
+// #define learnRate 0.05
+// #define momentum 0.7
+// #define batchSize 60
+
+int sampleDist(double* dist, int N);
 
 class Data{
 public:
@@ -94,10 +103,10 @@ public:
 
     Params(){}
     Params(int size_);
-    void randomize();
+    void randomize(double scale);
     void copy(Params params_);
     void accumulateGradient(Params params_);
-    void update();
+    void update(double scale, double momentum);
     void resetGradient();
 };
 
@@ -135,7 +144,16 @@ public:
     LSTM(Data* input_, Data* output_, LSTM* prevUnit);
 };
 
-class PolicyOutput : public Layer{
+class Dense : public Layer{
+protected:
+    void setupLayer(Data* input_, Data* output_, string operation);
+
+public:
+    Dense(){}
+    Dense(Data* input_, Data* output_);
+};
+
+class PolicyOutput : public Dense{
 public:
     PolicyOutput(Data* input_, Data* output_);
 };
@@ -157,17 +175,21 @@ public:
     // Construct a model structure
     Model(int inputSize_);
     void addLSTM(int outputSize_);
+    void addDense(int outputSize_);
     void addOutput(int outputSize_);
 
     // Define an active Model unit from given structure
     Model(Model structure, Model* prevModel, Data* input, Data* output);
 
     void copyParams(Model* m);
-    void randomize();
+    void randomize(double scale);
 
     void forwardPass();
     void backwardPass();
+
+    void resetGradient();
     void accumulateGradient(Model* m);
+    void updateParams(double scale, double momentum);
 };
 
 class ModelSeq{
@@ -176,13 +198,15 @@ public:
     vector<Model> seq;
     vector<Data> inputs;
     vector<Data> outputs;
-    vector<double*> expectedOutputs;
-    vector<bool*> validOutput;
+    // vector<double*> expectedOutputs;
+    // vector<bool*> validOutput;
     Model paramStore;
 
-    ModelSeq(Model structure, int T_);
+    ModelSeq(){}
+    ModelSeq(Model structure, int T_, double initParam);
     void forwardPassUnit(int index);
     void forwardPass();
+    void backwardPassUnit(int index);
     void backwardPass();
 
     double getLoss();
